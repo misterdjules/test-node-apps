@@ -1,5 +1,5 @@
 var test = require('tap').test
-var exec = require('child_process').exec;
+var execFile = require('child_process').execFile;
 var fs   = require('fs');
 var path = require('path');
 
@@ -7,24 +7,25 @@ var util   = require('util');
 var async  = require('async');
 var debug  = require('debug')('test-node-apps');
 var rimraf = require('rimraf');
+var which  = require('which');
 
 var APPS_TO_TEST = [
-"git://github.com/mikeal/request.git",
-"git://github.com/caolan/async.git",
-"git://github.com/gruntjs/grunt.git",
-"git://github.com/lodash/lodash.git",
-"git://github.com/gulpjs/gulp.git",
-"git://github.com/visionmedia/mocha.git",
-"git://github.com/LearnBoost/mongoose.git",
+  "git://github.com/mikeal/request.git",
+  "git://github.com/caolan/async.git",
+  "git://github.com/gruntjs/grunt.git",
+  "git://github.com/lodash/lodash.git",
+  "git://github.com/gulpjs/gulp.git",
+  "git://github.com/visionmedia/mocha.git",
+  "git://github.com/LearnBoost/mongoose.git",
 ];
 
 var LONGER_APPS_TO_TEST = [
-"git://github.com/TryGhost/Ghost.git",
-"git://github.com/npm/npm.git",
-"git://github.com/Automattic/socket.io.git",
-"git://github.com/strongloop/express.git",
-"git://github.com/hapijs/hapi.git",
-"git://github.com/Unitech/PM2.git",
+  "git://github.com/TryGhost/Ghost.git",
+  "git://github.com/npm/npm.git",
+  "git://github.com/Automattic/socket.io.git",
+  "git://github.com/strongloop/express.git",
+  "git://github.com/hapijs/hapi.git",
+  "git://github.com/Unitech/PM2.git",
 ]
 
 var TESTS_DIR = path.join(process.cwd(), './tests-workspace');
@@ -46,14 +47,23 @@ async.series([
   },
   function findNpmBinPath(cb) {
     debug('Looking for npm binary...');
-    exec('which npm', function (err, stdout, stderr) {
-      if (!err && stdout) {
-        npmBinPath = stdout.replace('\n', '');
+    if (process.platform === 'win32') {
+      npmBinPath = path.join("/", "Program Files (x86)",
+                             "nodejs",
+                             "node_modules",
+                             "npm",
+                             "bin", "npm-cli.js");
+      cb();
+    } else {
+    which('npm', function (err, path) {
+      if (!err && path) {
+        npmBinPath = path.replace('.CMD', '');
       }
 
       debug('Found npm binary in ' + npmBinPath);
       cb(err);
     });
+    }
   }
   ], function (err, results) {
     debug('Setup stage: ' + err);
@@ -74,31 +84,31 @@ async.series([
         async.series([
           function gitClone(cb) {
             debug('Git cloning...');
-            var gitCloneCmd = util.format('git clone %s %s',
-              gitUrl,
-              gitClonePath);
-            exec(gitCloneCmd, function (error, stdout, stderr) {
+            var gitCloneArgs = ['clone', gitUrl, gitClonePath];
+            execFile('git', gitCloneArgs, function (error, stdout, stderr) {
               cb(error);
             });
           },
           function npmInstall(cb) {
             debug('npm install...');
-            var npmInstallCmd = util.format("%s %s install",
-              process.execPath,
-              npmBinPath);
-            exec(npmInstallCmd, { cwd: gitClonePath }, function (error, stdout, stderr) {
-              cb(error);
-            });
+            var npmInstallArgs = [npmBinPath, 'install'];
+            execFile(process.execPath,
+                     npmInstallArgs,
+                     { cwd: gitClonePath },
+                     function (error, stdout, stderr) {
+                      cb(error);
+                     });
           },
           function npmTest(cb) {
             debug('npm test...');
-            var npmTestCmd = util.format("%s %s test",
-             process.execPath,
-             npmBinPath);
-            exec(npmTestCmd, { cwd: gitClonePath }, function (error, stdout, stderr) {
-              debug('Error with npm test: ' + error);
-              cb(error);
-            });
+            var npmTestArgs = [npmBinPath, 'test'];
+            execFile(process.execPath,
+                     npmTestArgs,
+                     { cwd: gitClonePath },
+                     function (error, stdout, stderr) {
+                       debug('Error with npm test: ' + error);
+                       cb(error);
+                     });
           },
           ], function (err, results) {
             t.equal(err, undefined, "git clone && npm install && npm test");
