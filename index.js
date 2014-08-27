@@ -37,6 +37,35 @@ function getAppNameFromGitUrl(gitUrl) {
   }
 }
 
+function gitClone(gitUrl, gitClonePath, cb) {
+  debug('Git cloning...');
+  var gitCloneArgs = ['clone', gitUrl, gitClonePath];
+  execFile('git', gitCloneArgs, function (error, stdout, stderr) {
+    cb(error);
+  });
+}
+
+function npmInstall(workingDir, cb) {
+  debug('npm install...');
+
+  var npmInstallArgs = [npmBinPath, 'install'];
+  execFile(process.execPath, npmInstallArgs, { cwd: workingDir },
+           function (error, stdout, stderr) {
+            cb(error);
+           });
+}
+
+function npmTest(workingDir, cb) {
+  debug('npm test...');
+
+  var npmTestArgs = [npmBinPath, 'test'];
+  execFile(process.execPath, npmTestArgs, { cwd: workingDir },
+           function (error, stdout, stderr) {
+             debug('Error with npm test: ' + error);
+             cb(error);
+           });
+}
+
 var npmBinPath;
 async.series([
   function rmRfTests(cb) {
@@ -82,34 +111,9 @@ async.series([
 
       test(testTitle, { timeout: 1000000 }, function appTest(t) {
         async.series([
-          function gitClone(cb) {
-            debug('Git cloning...');
-            var gitCloneArgs = ['clone', gitUrl, gitClonePath];
-            execFile('git', gitCloneArgs, function (error, stdout, stderr) {
-              cb(error);
-            });
-          },
-          function npmInstall(cb) {
-            debug('npm install...');
-            var npmInstallArgs = [npmBinPath, 'install'];
-            execFile(process.execPath,
-                     npmInstallArgs,
-                     { cwd: gitClonePath },
-                     function (error, stdout, stderr) {
-                      cb(error);
-                     });
-          },
-          function npmTest(cb) {
-            debug('npm test...');
-            var npmTestArgs = [npmBinPath, 'test'];
-            execFile(process.execPath,
-                     npmTestArgs,
-                     { cwd: gitClonePath },
-                     function (error, stdout, stderr) {
-                       debug('Error with npm test: ' + error);
-                       cb(error);
-                     });
-          },
+            gitClone.bind(global, gitUrl, gitClonePath),
+            npmInstall.bind(global, gitClonePath),
+            npmTest.bind(global, gitClonePath),
           ], function (err, results) {
             t.equal(err, undefined,
                     util.format("git clone && npm install && npm test for %s",
