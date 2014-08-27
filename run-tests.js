@@ -10,23 +10,13 @@ var rimraf = require('rimraf');
 var which  = require('which');
 
 var APPS_TO_TEST = [
-  "git://github.com/mikeal/request.git",
+  "git://github.com/TryGhost/Ghost.git",
   "git://github.com/caolan/async.git",
   "git://github.com/gruntjs/grunt.git",
-  "git://github.com/lodash/lodash.git",
   "git://github.com/gulpjs/gulp.git",
   "git://github.com/visionmedia/mocha.git",
   "git://github.com/LearnBoost/mongoose.git",
 ];
-
-var LONGER_APPS_TO_TEST = [
-  "git://github.com/TryGhost/Ghost.git",
-  "git://github.com/npm/npm.git",
-  "git://github.com/Automattic/socket.io.git",
-  "git://github.com/strongloop/express.git",
-  "git://github.com/hapijs/hapi.git",
-  "git://github.com/Unitech/PM2.git",
-]
 
 var TESTS_DIR = path.join(process.cwd(), './tests-workspace');
 
