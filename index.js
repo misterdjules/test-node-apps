@@ -111,7 +111,9 @@ async.series([
                      });
           },
           ], function (err, results) {
-            t.equal(err, undefined, "git clone && npm install && npm test");
+            t.equal(err, undefined,
+                    util.format("git clone && npm install && npm test for %s",
+                                appName));
             t.end();
             done();
           });
