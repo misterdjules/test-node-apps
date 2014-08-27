@@ -56,6 +56,27 @@ function npmTest(workingDir, cb) {
            });
 }
 
+function updateEngineToCurrent(workingDir, cb) {
+  var packageJsonFilePath = path.join(workingDir, "package.json");
+  debug(util.format('Updating engine property in file []', packageJsonFilePath));
+
+  fs.readFile(packageJsonFilePath, function(err, data) {
+    if (err) return cb(err);
+
+    try {
+      var packageSpecs = JSON.parse(data);
+      if (packageSpecs.engines && packageSpecs.engines.node) {
+        packageSpecs.engines.node = process.version.substring(1);
+        return fs.writeFile(packageJsonFilePath,
+                            JSON.stringify(packageSpecs, null, " "),
+                            cb);
+      }
+    } catch(e) {
+      return cb(e);
+    }
+  });
+}
+
 var npmBinPath;
 async.series([
   function rmRfTests(cb) {
@@ -102,9 +123,15 @@ async.series([
       test(testTitle, { timeout: 1000000 }, function appTest(t) {
         async.series([
             gitClone.bind(global, gitUrl, gitClonePath),
+            updateEngineToCurrent.bind(global, gitClonePath),
             npmInstall.bind(global, gitClonePath),
             npmTest.bind(global, gitClonePath),
           ], function (err, results) {
+            if (err) {
+              debug('Error:');
+              debug(err);
+            }
+
             t.equal(err, undefined,
                     util.format("git clone && npm install && npm test for %s",
                                 appName));
