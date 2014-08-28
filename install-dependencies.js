@@ -29,8 +29,8 @@ async.eachSeries(packages, function (packageName, done) {
     });
 }, function(err, results) {
     if (err) {
-        console.err('Installation failed!');
-        console.err(err);
+        console.error('Installation failed!');
+        console.error(err);
         process.exit(1);
     }
 });
