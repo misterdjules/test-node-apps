@@ -19,6 +19,7 @@ var APPS_TO_TEST = [
   "git://github.com/hapijs/hapi.git",
   "git://github.com/mcavage/node-restify.git",
   "git://github.com/krakenjs/kraken-js.git",
+  "git://github.com/koajs/koa.git",
 ];
 
 var TESTS_DIR = path.join(process.cwd(), './tests-workspace');
