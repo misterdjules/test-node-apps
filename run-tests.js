@@ -1,5 +1,5 @@
 var test = require('tap').test
-var execFile = require('child_process').execFile;
+var spawn = require('child_process').spawn;
 var fs   = require('fs');
 var path = require('path');
 
@@ -27,11 +27,32 @@ function getAppNameFromGitUrl(gitUrl) {
   }
 }
 
+function handleExitCode(code, stderr, cb) {
+  var error;
+  if (code !== 0) {
+    var errMsg = "command failed:\n" + stderr.toString();
+    error = new Error(errMsg);
+  }
+
+  return cb(error);
+}
+
 function gitClone(gitUrl, gitClonePath, cb) {
   debug('Git cloning...');
   var gitCloneArgs = ['clone', gitUrl, gitClonePath];
-  execFile('git', gitCloneArgs, function (error, stdout, stderr) {
-    cb(error);
+  var spawnedGitClone = spawn('git', gitCloneArgs);
+  var stderr;
+
+  spawnedGitClone.on('exit', function onGitCloneClosed(code) {
+    return handleExitCode(code, stderr, cb);
+  });
+
+  spawnedGitClone.on('error', function onGitCloneClosed(err) {
+    return cb(err);
+  });
+
+  spawnedGitClone.stderr.on('data', function(data) {
+    stderr += data;
   });
 }
 
@@ -39,26 +60,60 @@ function npmInstall(workingDir, cb) {
   debug('npm install...');
 
   var npmInstallArgs = [npmBinPath, 'install'];
-  execFile(process.execPath, npmInstallArgs, { cwd: workingDir },
-           function (error, stdout, stderr) {
-            cb(error);
-           });
+  var spawnedNpmInstall = spawn(process.execPath,
+                                npmInstallArgs,
+                                { cwd: workingDir, env: process.env });
+  var stderr;
+
+  spawnedNpmInstall.on('exit', function onNpmInstallClosed(code) {
+    debug('exit code:' + code);
+    return handleExitCode(code, stderr, cb);
+  });
+
+  spawnedNpmInstall.on('error', function onNpmInstallClosed(err) {
+    return cb(err);
+  });
+
+  spawnedNpmInstall.stderr.on('data', function(data) {
+    debug("stderr: " + data.toString());
+    stderr += data;
+  });
+
+  spawnedNpmInstall.stdout.on('data', function(data) {
+    debug("stdout: " + data.toString());
+  });
 }
 
 function npmTest(workingDir, cb) {
   debug('npm test...');
 
   var npmTestArgs = [npmBinPath, 'test'];
-  execFile(process.execPath, npmTestArgs, { cwd: workingDir },
-           function (error, stdout, stderr) {
-             debug('Error with npm test: ' + error);
-             cb(error);
-           });
+  var spawnedNpmTest = spawn(process.execPath,
+                             npmTestArgs,
+                             { cwd: workingDir });
+  var stderr;
+
+  spawnedNpmTest.on('exit', function onNpmTestClosed(code) {
+    return handleExitCode(code, stderr, cb);
+  });
+
+  spawnedNpmTest.on('error', function onNpmInstallClosed(err) {
+    return cb(err);
+  });
+
+  spawnedNpmTest.stderr.on('data', function(data) {
+    debug("npm test stderr: " + data.toString());
+    stderr += data;
+  });
+
+  spawnedNpmTest.stdout.on('data', function(data) {
+    debug('npm test stdout: ', data.toString());
+  });
 }
 
 function updateEngineToCurrent(workingDir, cb) {
   var packageJsonFilePath = path.join(workingDir, "package.json");
-  debug(util.format('Updating engine property in file []', packageJsonFilePath));
+  debug(util.format('Updating engine property in file [%s]', packageJsonFilePath));
 
   fs.readFile(packageJsonFilePath, function(err, data) {
     if (err) return cb(err);
@@ -74,6 +129,8 @@ function updateEngineToCurrent(workingDir, cb) {
     } catch(e) {
       return cb(e);
     }
+
+    return cb();
   });
 }
 
@@ -95,14 +152,14 @@ async.series([
                              "bin", "npm-cli.js");
       cb();
     } else {
-    which('npm', function (err, path) {
-      if (!err && path) {
-        npmBinPath = path.replace('.CMD', '');
-      }
+      which('npm', function (err, path) {
+        if (!err && path) {
+          npmBinPath = path.replace('.CMD', '');
+        }
 
-      debug('Found npm binary in ' + npmBinPath);
-      cb(err);
-    });
+        debug('Found npm binary in ' + npmBinPath);
+        cb(err);
+      });
     }
   }
   ], function (err, results) {
