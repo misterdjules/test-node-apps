@@ -15,7 +15,9 @@ var APPS_TO_TEST = [
   "git://github.com/gruntjs/grunt.git",
   "git://github.com/gulpjs/gulp.git",
   "git://github.com/visionmedia/mocha.git",
-  "git://github.com/LearnBoost/mongoose.git",
+  "git://github.com/strongloop/express.git",
+  "git://github.com/hapijs/hapi.git",
+  "git://github.com/mcavage/node-restify.git",
 ];
 
 var TESTS_DIR = path.join(process.cwd(), './tests-workspace');
