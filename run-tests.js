@@ -57,6 +57,12 @@ function npmInstall(workingDir, packages, cb) {
   }
 
   var npmInstallArgs = [npmBinPath, 'install'];
+
+  // Pass additional arguments directly to npm install
+  if (process.argv.length > 1) {
+    npmInstallArgs = npmInstallArgs.concat(process.argv.slice(2));
+  }
+
   if (packages) {
       npmInstallArgs = npmInstallArgs.concat(packages);
   }
