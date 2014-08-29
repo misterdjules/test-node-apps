@@ -233,15 +233,20 @@ async.series([
     async.eachSeries(appsToTest, function (appToTest, done) {
 
       var appRepo = appToTest.repo;
+      debug(util.format('App repository is: [%s]', appRepo));
+      assert(appRepo);
 
       var appName = getAppNameFromGitUrl(appRepo);
       debug('Adding test for app [%s]', appName);
+      assert(appName);
 
       var gitClonePath = path.join(TESTS_DIR, appName);
       debug('Git clone path: ' + gitClonePath);
+      assert(gitClonePath);
 
       var npmBinPath = results[2];
       debug('npmBinPath: ' + npmBinPath);
+      assert(npmBinPath);
 
       var additionalNpmDeps = appToTest["additional-npm-deps"];
       if (additionalNpmDeps) {
@@ -249,8 +254,7 @@ async.series([
               additionalNpmDeps.join(", "));
       }
 
-      var testTitle = util.format("%s with Node %s", appName,
-                                  process.version);
+      var testTitle = "git clone && npm install && npm test for " + appName;
 
       test(testTitle, { timeout: 1000000 }, function appTest(t) {
         var testTasks = [ gitClone.bind(global, appRepo, gitClonePath) ];
@@ -273,9 +277,10 @@ async.series([
             debug(err);
           }
 
-          t.equal(err, undefined,
-                  util.format("git clone && npm install && npm test for %s",
-                              appName));
+          var testMessage = util.format("%s with Node %s", appName,
+                                        process.version);
+          t.equal(err, undefined, testMessage);
+
           t.end();
           done();
         });
