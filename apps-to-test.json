@@ -1,7 +1,12 @@
 [
   {
-     "repo": "git://github.com/TryGhost/Ghost.git",
-     "additional-npm-deps": ["casperjs", "phantomjs"]
+    "repo": "git://github.com/TryGhost/Ghost.git",
+    "additional-npm-deps": ["casperjs", "phantomjs"],
+    "package-json-change": {
+      "engines": {
+        "node": "%{ process.version.substring(1) }%"
+      }
+    }
   },
   {
     "repo": "git://github.com/caolan/async.git"

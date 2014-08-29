@@ -2,6 +2,7 @@ var test = require('tap').test
 var spawn = require('child_process').spawn;
 var fs   = require('fs');
 var path = require('path');
+var assert = require('assert');
 
 var util   = require('util');
 var async  = require('async');
@@ -29,6 +30,25 @@ function handleExitCode(code, stderr, cb) {
   return cb(error);
 }
 
+function changeObject(object, change) {
+  if (typeof object === 'object' && typeof change === 'object') {
+    Object.keys(object).forEach(function(key) {
+      if (key in change) {
+        object[key] = changeObject(object[key], change[key]);
+      }
+    });
+  } else {
+    var matches;
+    if (matches = /^%({.*})%$/.exec(change)) {
+      object = eval(matches[1]);
+    } else {
+      object = change;
+    }
+  }
+
+  return object;
+}
+
 function gitClone(gitUrl, gitClonePath, cb) {
   debug('Git cloning...');
   var gitCloneArgs = ['clone', gitUrl, gitClonePath];
@@ -48,8 +68,9 @@ function gitClone(gitUrl, gitClonePath, cb) {
   });
 }
 
-function npmInstall(workingDir, packages, cb) {
+function npmInstall(npmBinPath, workingDir, packages, cb) {
   debug('npm install...');
+  assert(npmBinPath);
 
   if (typeof packages === 'function') {
     cb = packages;
@@ -91,8 +112,9 @@ function npmInstall(workingDir, packages, cb) {
   });
 }
 
-function npmTest(workingDir, cb) {
+function npmTest(npmBinPath, workingDir, cb) {
   debug('npm test...');
+  assert(npmBinPath);
 
   var npmTestArgs = [npmBinPath, 'test'];
   var spawnedNpmTest = spawn(process.execPath,
@@ -118,9 +140,14 @@ function npmTest(workingDir, cb) {
   });
 }
 
-function updateEngineToCurrent(workingDir, cb) {
+function updatePackageJson(workingDir, packageJsonChange, cb) {
+  if (typeof packageJsonChange === 'function') {
+    cb = packageJsonChange;
+    packageJsonChange = undefined;
+  }
+
   var packageJsonFilePath = path.join(workingDir, "package.json");
-  debug(util.format('Updating engine property in file [%s]',
+  debug(util.format('Updating package json file [%s]',
                     packageJsonFilePath));
 
   fs.readFile(packageJsonFilePath, function(err, data) {
@@ -128,12 +155,17 @@ function updateEngineToCurrent(workingDir, cb) {
 
     try {
       var packageSpecs = JSON.parse(data);
-      if (packageSpecs.engines && packageSpecs.engines.node) {
-        packageSpecs.engines.node = process.version.substring(1);
-        return fs.writeFile(packageJsonFilePath,
-                            JSON.stringify(packageSpecs, null, " "),
-                            cb);
-      }
+
+      debug('Object to change:');
+      debug(packageSpecs);
+
+      debug('Change to apply:');
+      debug(packageJsonChange);
+
+      changeObject(packageSpecs, packageJsonChange);
+      return fs.writeFile(packageJsonFilePath,
+                          JSON.stringify(packageSpecs, null, " "),
+                          cb);
     } catch(e) {
       return cb(e);
     }
@@ -142,50 +174,57 @@ function updateEngineToCurrent(workingDir, cb) {
   });
 }
 
-var npmBinPath;
-async.series([
-  function rmRfTests(cb) {
-    rimraf(TESTS_DIR, cb);
-  },
-  function createTestsDir(cb) {
-    fs.mkdir(TESTS_DIR, cb);
-  },
-  function findNpmBinPath(cb) {
-    debug('Looking for npm binary...');
-    if (process.platform === 'win32') {
-      npmBinPath = path.join("/", "Program Files (x86)",
-                             "nodejs",
-                             "node_modules",
-                             "npm",
-                             "bin", "npm-cli.js");
-      cb();
-    } else {
-      which('npm', function (err, path) {
-        if (!err && path) {
-          npmBinPath = path.replace('.CMD', '');
-        }
+function findNpmBinPath(cb) {
+  var npmBinPath;
 
-        debug('Found npm binary in ' + npmBinPath);
-        cb(err);
-      });
-    }
-  },
-  function loadAppsToTest(cb) {
-    fs.readFile(APPS_TO_TEST_FILE_PATH, function(err, data) {
-      var appsToTest;
-      if (!err) {
-        try {
-           appsToTest = JSON.parse(data);
-        } catch(e) {
-          err = e;
-        }
+  debug('Looking for npm binary...');
+
+  if (process.platform === 'win32') {
+    npmBinPath = path.join("/", "Program Files (x86)",
+                           "nodejs",
+                           "node_modules",
+                           "npm",
+                           "bin", "npm-cli.js");
+    return cb(null, npmBinPath);
+  } else {
+    which('npm', function (err, path) {
+      if (!err && path) {
+        npmBinPath = path.replace('.CMD', '');
       }
 
-      return cb(err, appsToTest);
+      return cb(err, npmBinPath);
     });
   }
-], function (err, results) {
-    debug('Setup stage: ' + err);
+}
+
+function loadAppsToTest(cb) {
+  debug('Loading apps to test...');
+
+  fs.readFile(APPS_TO_TEST_FILE_PATH, function(err, data) {
+    var appsToTest;
+    if (!err) {
+      try {
+         appsToTest = JSON.parse(data);
+      } catch(e) {
+        err = e;
+      }
+    }
+
+    return cb(err, appsToTest);
+  });
+}
+
+async.series([
+    rimraf.bind(this, TESTS_DIR),
+    fs.mkdir.bind(this, TESTS_DIR),
+    findNpmBinPath.bind(this),
+    loadAppsToTest.bind(this),
+  ], function (err, results) {
+    if (err) {
+      debug('Error: ' + err);
+      process.exit(1);
+    }
+    debug('results: ' + util.inspect(results));
 
     var appsToTest = results[3];
     debug('Apps to test:');
@@ -201,37 +240,45 @@ async.series([
       var gitClonePath = path.join(TESTS_DIR, appName);
       debug('Git clone path: ' + gitClonePath);
 
+      var npmBinPath = results[2];
+      debug('npmBinPath: ' + npmBinPath);
+
       var additionalNpmDeps = appToTest["additional-npm-deps"];
       if (additionalNpmDeps) {
         debug('Additional npm deps will be installed: ' +
               additionalNpmDeps.join(", "));
       }
 
-      var testTitle = util.format("Make sure that %s works correctly with Node.js %s",
-                                  appName,
+      var testTitle = util.format("%s with Node %s", appName,
                                   process.version);
 
       test(testTitle, { timeout: 1000000 }, function appTest(t) {
-        async.series([
-            gitClone.bind(global, appRepo, gitClonePath),
-            // updateEngineToCurrent is only needed for Ghost, which
-            // explicitely tests for node engine's semver.
-            updateEngineToCurrent.bind(global, gitClonePath),
-            npmInstall.bind(global, gitClonePath),
-            npmInstall.bind(global, gitClonePath, additionalNpmDeps),
-            npmTest.bind(global, gitClonePath),
-          ], function (err, results) {
-            if (err) {
-              debug('Error:');
-              debug(err);
-            }
+        var testTasks = [ gitClone.bind(global, appRepo, gitClonePath) ];
 
-            t.equal(err, undefined,
-                    util.format("git clone && npm install && npm test for %s",
-                                appName));
-            t.end();
-            done();
-          });
+        if (appToTest["package-json-change"]) {
+          testTasks.push(updatePackageJson.bind(global,
+                                                gitClonePath,
+                                                appToTest["package-json-change"]));
+        }
+
+        testTasks = testTasks.concat([
+            npmInstall.bind(global, npmBinPath, gitClonePath),
+            npmInstall.bind(global, npmBinPath, gitClonePath, additionalNpmDeps),
+            npmTest.bind(global,    npmBinPath, gitClonePath),
+          ]);
+
+        async.series(testTasks, function (err, results) {
+          if (err) {
+            debug('Error:');
+            debug(err);
+          }
+
+          t.equal(err, undefined,
+                  util.format("git clone && npm install && npm test for %s",
+                              appName));
+          t.end();
+          done();
+        });
       });
     }, function allAppsTested(err) {
       debug('All apps tested, done!');
