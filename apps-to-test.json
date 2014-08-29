@@ -1,0 +1,34 @@
+[
+  {
+     "repo": "git://github.com/TryGhost/Ghost.git",
+     "additional-npm-deps": ["casperjs", "phantomjs"]
+  },
+  {
+    "repo": "git://github.com/caolan/async.git"
+  },
+  {
+    "repo": "git://github.com/gruntjs/grunt.git",
+    "additional-npm-deps": ["grunt-cli"]
+  },
+  {
+    "repo": "git://github.com/gulpjs/gulp.git"
+  },
+  {
+    "repo": "git://github.com/visionmedia/mocha.git"
+  },
+  {
+    "repo": "git://github.com/strongloop/express.git"
+  },
+  {
+    "repo": "git://github.com/hapijs/hapi.git"
+  },
+  {
+    "repo": "git://github.com/mcavage/node-restify.git"
+  },
+  {
+    "repo": "git://github.com/krakenjs/kraken-js.git"
+  },
+  {
+    "repo": "git://github.com/koajs/koa.git"
+  }
+]

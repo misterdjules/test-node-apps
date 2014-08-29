@@ -9,20 +9,8 @@ var debug  = require('debug')('test-node-apps');
 var rimraf = require('rimraf');
 var which  = require('which');
 
-var APPS_TO_TEST = [
-  "git://github.com/TryGhost/Ghost.git",
-  "git://github.com/caolan/async.git",
-  "git://github.com/gruntjs/grunt.git",
-  "git://github.com/gulpjs/gulp.git",
-  "git://github.com/visionmedia/mocha.git",
-  "git://github.com/strongloop/express.git",
-  "git://github.com/hapijs/hapi.git",
-  "git://github.com/mcavage/node-restify.git",
-  "git://github.com/krakenjs/kraken-js.git",
-  "git://github.com/koajs/koa.git",
-];
-
 var TESTS_DIR = path.join(process.cwd(), './tests-workspace');
+var APPS_TO_TEST_FILE_PATH = './apps-to-test.json';
 
 function getAppNameFromGitUrl(gitUrl) {
   var matches;
@@ -60,10 +48,19 @@ function gitClone(gitUrl, gitClonePath, cb) {
   });
 }
 
-function npmInstall(workingDir, cb) {
+function npmInstall(workingDir, packages, cb) {
   debug('npm install...');
 
+  if (typeof packages === 'function') {
+    cb = packages;
+    packages = null;
+  }
+
   var npmInstallArgs = [npmBinPath, 'install'];
+  if (packages) {
+      npmInstallArgs = npmInstallArgs.concat(packages);
+  }
+
   var spawnedNpmInstall = spawn(process.execPath,
                                 npmInstallArgs,
                                 { cwd: workingDir, env: process.env });
@@ -117,7 +114,8 @@ function npmTest(workingDir, cb) {
 
 function updateEngineToCurrent(workingDir, cb) {
   var packageJsonFilePath = path.join(workingDir, "package.json");
-  debug(util.format('Updating engine property in file [%s]', packageJsonFilePath));
+  debug(util.format('Updating engine property in file [%s]',
+                    packageJsonFilePath));
 
   fs.readFile(packageJsonFilePath, function(err, data) {
     if (err) return cb(err);
@@ -165,27 +163,53 @@ async.series([
         cb(err);
       });
     }
+  },
+  function loadAppsToTest(cb) {
+    fs.readFile(APPS_TO_TEST_FILE_PATH, function(err, data) {
+      var appsToTest;
+      if (!err) {
+        try {
+           appsToTest = JSON.parse(data);
+        } catch(e) {
+          err = e;
+        }
+      }
+
+      return cb(err, appsToTest);
+    });
   }
-  ], function (err, results) {
+], function (err, results) {
     debug('Setup stage: ' + err);
 
-    async.eachSeries(APPS_TO_TEST, function (gitUrl, done) {
+    var appsToTest = results[3];
+    debug('Apps to test:');
+    debug(util.inspect(appsToTest));
 
-      var appName = getAppNameFromGitUrl(gitUrl);
+    async.eachSeries(appsToTest, function (appToTest, done) {
+
+      var appRepo = appToTest.repo;
+
+      var appName = getAppNameFromGitUrl(appRepo);
       debug('Adding test for app [%s]', appName);
 
       var gitClonePath = path.join(TESTS_DIR, appName);
       debug('Git clone path: ' + gitClonePath);
 
+      var additionalNpmDeps = appToTest["additional-npm-deps"];
+      debug('Additional npm deps will be installed: ' + additional-npm-deps);
+
       var testTitle = util.format("Make sure that %s works correctly with Node.js %s",
-        appName,
-        process.version);
+                                  appName,
+                                  process.version);
 
       test(testTitle, { timeout: 1000000 }, function appTest(t) {
         async.series([
-            gitClone.bind(global, gitUrl, gitClonePath),
+            gitClone.bind(global, appRepo, gitClonePath),
+            // updateEngineToCurrent is only needed for Ghost, which
+            // explicitely tests for node engine's semver.
             updateEngineToCurrent.bind(global, gitClonePath),
             npmInstall.bind(global, gitClonePath),
+            npmInstall.bind(global, gitClonePath, additionalNpmDeps),
             npmTest.bind(global, gitClonePath),
           ], function (err, results) {
             if (err) {
