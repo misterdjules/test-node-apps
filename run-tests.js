@@ -196,7 +196,10 @@ async.series([
       debug('Git clone path: ' + gitClonePath);
 
       var additionalNpmDeps = appToTest["additional-npm-deps"];
-      debug('Additional npm deps will be installed: ' + additional-npm-deps);
+      if (additionalNpmDeps) {
+        debug('Additional npm deps will be installed: ' +
+              additionalNpmDeps.join(", "));
+      }
 
       var testTitle = util.format("Make sure that %s works correctly with Node.js %s",
                                   appName,
