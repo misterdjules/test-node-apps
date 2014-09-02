@@ -1,14 +1,15 @@
-var test = require('tap').test
 var spawn = require('child_process').spawn;
 var fs   = require('fs');
 var path = require('path');
 var assert = require('assert');
-
 var util   = require('util');
+
+var test = require('tap').test
 var async  = require('async');
 var debug  = require('debug')('test-node-apps');
 var rimraf = require('rimraf');
 var which  = require('which');
+var argv = require('minimist')(process.argv.slice(2));
 
 var TESTS_DIR = path.join(process.cwd(), './tests-workspace');
 var APPS_TO_TEST_FILE_PATH = './apps-to-test.json';
@@ -214,78 +215,142 @@ function loadAppsToTest(cb) {
   });
 }
 
-async.series([
-    rimraf.bind(this, TESTS_DIR),
-    fs.mkdir.bind(this, TESTS_DIR),
-    findNpmBinPath.bind(this),
-    loadAppsToTest.bind(this),
-  ], function (err, results) {
-    if (err) {
-      debug('Error: ' + err);
-      process.exit(1);
+function runTestForApp(npmBinPath, appToTest, cb) {
+  assert(npmBinPath);
+  assert(appToTest);
+
+  var appRepo = appToTest.repo;
+  debug(util.format('App repository is: [%s]', appRepo));
+  assert(appRepo);
+
+  var appName = getAppNameFromGitUrl(appRepo);
+  debug('Adding test for app [%s]', appName);
+  assert(appName);
+
+  var gitClonePath = path.join(TESTS_DIR, appName);
+  debug('Git clone path: ' + gitClonePath);
+  assert(gitClonePath);
+
+  var additionalNpmDeps = appToTest["additional-npm-deps"];
+  if (additionalNpmDeps) {
+    debug('Additional npm deps will be installed: ' +
+          additionalNpmDeps.join(", "));
+  }
+
+  var testTitle = "git clone && npm install && npm test for " + appName;
+
+  test(testTitle, { timeout: 1000000 }, function appTest(t) {
+    var testTasks = [ gitClone.bind(global, appRepo, gitClonePath) ];
+
+    if (appToTest["package-json-change"]) {
+      testTasks.push(updatePackageJson.bind(global,
+                                            gitClonePath,
+                                            appToTest["package-json-change"]));
     }
-    debug('results: ' + util.inspect(results));
 
-    var appsToTest = results[3];
-    debug('Apps to test:');
-    debug(util.inspect(appsToTest));
+    testTasks = testTasks.concat([
+        npmInstall.bind(global, npmBinPath, gitClonePath),
+        npmInstall.bind(global, npmBinPath, gitClonePath, additionalNpmDeps),
+        npmTest.bind(global,    npmBinPath, gitClonePath),
+      ]);
 
-    async.eachSeries(appsToTest, function (appToTest, done) {
-
-      var appRepo = appToTest.repo;
-      debug(util.format('App repository is: [%s]', appRepo));
-      assert(appRepo);
-
-      var appName = getAppNameFromGitUrl(appRepo);
-      debug('Adding test for app [%s]', appName);
-      assert(appName);
-
-      var gitClonePath = path.join(TESTS_DIR, appName);
-      debug('Git clone path: ' + gitClonePath);
-      assert(gitClonePath);
-
-      var npmBinPath = results[2];
-      debug('npmBinPath: ' + npmBinPath);
-      assert(npmBinPath);
-
-      var additionalNpmDeps = appToTest["additional-npm-deps"];
-      if (additionalNpmDeps) {
-        debug('Additional npm deps will be installed: ' +
-              additionalNpmDeps.join(", "));
+    async.series(testTasks, function (err, results) {
+      if (err) {
+        debug('Error:');
+        debug(err);
       }
 
-      var testTitle = "git clone && npm install && npm test for " + appName;
+      var testMessage = util.format("%s with Node %s", appName,
+                                    process.version);
+      t.equal(err, undefined, testMessage);
 
-      test(testTitle, { timeout: 1000000 }, function appTest(t) {
-        var testTasks = [ gitClone.bind(global, appRepo, gitClonePath) ];
-
-        if (appToTest["package-json-change"]) {
-          testTasks.push(updatePackageJson.bind(global,
-                                                gitClonePath,
-                                                appToTest["package-json-change"]));
-        }
-
-        testTasks = testTasks.concat([
-            npmInstall.bind(global, npmBinPath, gitClonePath),
-            npmInstall.bind(global, npmBinPath, gitClonePath, additionalNpmDeps),
-            npmTest.bind(global,    npmBinPath, gitClonePath),
-          ]);
-
-        async.series(testTasks, function (err, results) {
-          if (err) {
-            debug('Error:');
-            debug(err);
-          }
-
-          var testMessage = util.format("%s with Node %s", appName,
-                                        process.version);
-          t.equal(err, undefined, testMessage);
-
-          t.end();
-          done();
-        });
-      });
-    }, function allAppsTested(err) {
-      debug('All apps tested, done!');
+      t.end();
+      return cb();
+    });
   });
+}
+
+function setupTestsWorkspace(cb) {
+  async.series([
+    rimraf.bind(this, TESTS_DIR),
+    fs.mkdir.bind(this, TESTS_DIR),
+  ], cb);
+}
+
+function listApps(cb) {
+  loadAppsToTest(function(err, appsToTest) {
+    if (!err && appsToTest) {
+      var apps = {}
+      apps.list = [];
+
+      appsToTest.forEach(function(appToTest) {
+        var appName = getAppNameFromGitUrl(appToTest.repo);
+        var app = {
+          name: appName,
+          repo: appToTest.repo
+        };
+
+        apps.list.push(app);
+        apps[appName] = app;
+      });
+    }
+
+    return cb(err, apps);
+  })
+}
+
+function runTestForApps(npmBinPath, apps, cb) {
+  assert(npmBinPath);
+  assert(apps);
+  assert(cb);
+
+  if (!apps) {
+    return cb();
+  }
+
+  async.eachSeries(apps, function(app, done) {
+    runTestForApp(npmBinPath, app, done);
+  }, function allAppsTested(err, results) {
+    return cb(err);
+  });
+}
+
+listApps(function(err, apps) {
+  if (err) {
+    console.error('Could not list applications to test: ', err);
+    process.exit(1);
+  }
+
+  if (argv["list-apps"]) {
+    console.log('Applications to test:')
+    apps.list.forEach(function(appToTest) {
+      console.log('  * ' + appToTest.name);
+      console.log('    - ' + 'Git URL: ', appToTest.repo);
+    });
+  } else {
+    setupTestsWorkspace(function(err) {
+      if (err) {
+        console.error('Error when setting up tests workspace: ', err);
+        process.exit(1);
+      } else {
+        debug('Setup of tests workspace done successfully!');
+      }
+
+      if (argv["apps"]) {
+        argv["apps"].split(',').forEach(function(appName) {
+          findNpmBinPath(function(err, npmBinPath) {
+            runTestForApps(npmBinPath, [ apps[appName] ], function(err) {
+              debug('All apps tested!');
+            });
+          })
+        })
+      } else {
+        findNpmBinPath(function(err, npmBinPath) {
+          runTestForApps(npmBinPath, apps, function(err) {
+            debug('All apps tested!');
+          });
+        });
+      }
+    });
+  }
 });
