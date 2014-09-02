@@ -80,13 +80,13 @@ function npmInstall(npmBinPath, workingDir, packages, cb) {
 
   var npmInstallArgs = [npmBinPath, 'install'];
 
-  // Pass additional arguments directly to npm install
-  if (process.argv.length > 1) {
-    npmInstallArgs = npmInstallArgs.concat(process.argv.slice(2));
+  // Pass additional npm arguments verbatim to npm install
+  if (argv.nodedir) {
+    npmInstallArgs.push('--nodedir=' + argv.nodedir);
   }
 
   if (packages) {
-      npmInstallArgs = npmInstallArgs.concat(packages);
+    npmInstallArgs = npmInstallArgs.concat(packages);
   }
 
   var spawnedNpmInstall = spawn(process.execPath,

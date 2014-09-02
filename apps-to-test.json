@@ -1,7 +1,7 @@
 [
   {
     "repo": "git://github.com/TryGhost/Ghost.git",
-    "additional-npm-deps": ["casperjs", "phantomjs"],
+    "additional-npm-deps": ["casperjs", "phantomjs@1.9.1-7"],
     "package-json-change": {
       "engines": {
         "node": "%{ process.version.substring(1) }%"
