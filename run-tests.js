@@ -332,21 +332,20 @@ listApps(function(err, apps) {
         debug('Setup of tests workspace done successfully!');
       }
 
+      var appsToTest = apps.list;
       if (argv["apps"]) {
+        appsToTest = [];
         argv["apps"].split(',').forEach(function(appName) {
-          findNpmBinPath(function(err, npmBinPath) {
-            runTestForApps(npmBinPath, [ apps[appName] ], function(err) {
-              debug('All apps tested!');
-            });
-          })
-        })
-      } else {
-        findNpmBinPath(function(err, npmBinPath) {
-          runTestForApps(npmBinPath, apps.list, function(err) {
-            debug('All apps tested!');
-          });
+          appsToTest.push(apps[appName]);
         });
       }
+
+      findNpmBinPath(function(err, npmBinPath) {
+        runTestForApps(npmBinPath, appsToTest, function(err) {
+          debug('All apps tested!');
+        });
+      });
+
     });
   }
 });
