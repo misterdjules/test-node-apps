@@ -346,7 +346,7 @@ listApps(function(err, apps) {
         })
       } else {
         findNpmBinPath(function(err, npmBinPath) {
-          runTestForApps(npmBinPath, apps, function(err) {
+          runTestForApps(npmBinPath, apps.list, function(err) {
             debug('All apps tested!');
           });
         });
