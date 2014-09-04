@@ -10,8 +10,11 @@ var debug  = require('debug')('test-node-apps');
 var rimraf = require('rimraf');
 var which  = require('which');
 var argv = require('minimist')(process.argv.slice(2));
+var glob = require('glob');
+var split = require('split');
 
-var TESTS_DIR = path.join(process.cwd(), './tests-workspace');
+var TESTS_DIR = path.join(process.cwd(), 'tests-workspace');
+var TESTS_RESULTS_DIR = path.join(process.cwd(), 'tests-results');
 var APPS_TO_TEST_FILE_PATH = './apps-to-test.json';
 
 function getAppNameFromGitUrl(gitUrl) {
@@ -19,6 +22,10 @@ function getAppNameFromGitUrl(gitUrl) {
   if (gitUrl && (matches = gitUrl.match(/.*\/(.*)\.git/))) {
     return matches[1];
   }
+}
+
+function getAppName(appToTest) {
+  return getAppNameFromGitUrl(appToTest.repo);
 }
 
 function handleExitCode(code, stderr, cb) {
@@ -51,16 +58,19 @@ function changeObject(object, change) {
 }
 
 function gitClone(gitUrl, gitClonePath, cb) {
-  debug('Git cloning...');
+  debug(util.format('Git cloning from [%s] to [%s]...',
+                    gitUrl,
+                    gitClonePath));
+
   var gitCloneArgs = ['clone', gitUrl, gitClonePath];
   var spawnedGitClone = spawn('git', gitCloneArgs);
   var stderr;
 
-  spawnedGitClone.on('exit', function onGitCloneClosed(code) {
+  spawnedGitClone.on('exit', function onGitCloneExited(code) {
     return handleExitCode(code, stderr, cb);
   });
 
-  spawnedGitClone.on('error', function onGitCloneClosed(err) {
+  spawnedGitClone.on('error', function onGitCloneError(err) {
     return cb(err);
   });
 
@@ -69,13 +79,42 @@ function gitClone(gitUrl, gitClonePath, cb) {
   });
 }
 
+function gitCheckout(gitClonePath, gitBranchName, cb) {
+  debug(util.format('Git checkout branch [%s] in directory [%s]...',
+                    gitBranchName, gitClonePath));
+
+  var gitCheckoutArgs = ['checkout', gitBranchName];
+  var spawnedGitCheckout = spawn('git',
+                                 gitCheckoutArgs,
+                                 { cwd: gitClonePath });
+  var stderr;
+
+  spawnedGitCheckout.on('exit', function onGitCheckoutExited(code) {
+    return handleExitCode(code, stderr, cb);
+  });
+
+  spawnedGitCheckout.on('error', function onGitCheckoutError(err) {
+    return cb(err);
+  });
+
+  spawnedGitCheckout.stderr.on('data', function(data) {
+    stderr += data;
+  });
+}
+
 function npmInstall(npmBinPath, workingDir, packages, cb) {
-  debug('npm install...');
+
   assert(npmBinPath);
 
   if (typeof packages === 'function') {
     cb = packages;
     packages = null;
+  }
+
+  if (packages) {
+    debug(util.format('npm install packages: [%s]', packages.join(', ')));
+  } else {
+    debug('npm install');
   }
 
   var npmInstallArgs = [npmBinPath, 'install'];
@@ -94,12 +133,12 @@ function npmInstall(npmBinPath, workingDir, packages, cb) {
                                 { cwd: workingDir, env: process.env });
   var stderr;
 
-  spawnedNpmInstall.on('exit', function onNpmInstallClosed(code) {
+  spawnedNpmInstall.on('exit', function onNpmInstallExited(code) {
     debug('exit code:' + code);
     return handleExitCode(code, stderr, cb);
   });
 
-  spawnedNpmInstall.on('error', function onNpmInstallClosed(err) {
+  spawnedNpmInstall.on('error', function onNpmInstallError(err) {
     return cb(err);
   });
 
@@ -113,11 +152,11 @@ function npmInstall(npmBinPath, workingDir, packages, cb) {
   });
 }
 
-function npmTest(npmBinPath, workingDir, cb) {
-  debug('npm test...');
+function npmTest(npmBinPath, npmTestScript, workingDir, cb) {
   assert(npmBinPath);
+  assert(npmTestScript);
 
-  var npmTestArgs = [npmBinPath, 'test'];
+  var npmTestArgs = [npmBinPath, 'run', npmTestScript];
   var spawnedNpmTest = spawn(process.execPath,
                              npmTestArgs,
                              { cwd: workingDir });
@@ -215,6 +254,13 @@ function loadAppsToTest(cb) {
   });
 }
 
+function getGitClonePathForApp(appToTest) {
+  var appName = getAppName(appToTest);
+  assert(appName);
+
+  return path.join(TESTS_DIR, appName);
+}
+
 function runTestForApp(npmBinPath, appToTest, cb) {
   assert(npmBinPath);
   assert(appToTest);
@@ -223,13 +269,20 @@ function runTestForApp(npmBinPath, appToTest, cb) {
   debug(util.format('App repository is: [%s]', appRepo));
   assert(appRepo);
 
-  var appName = getAppNameFromGitUrl(appRepo);
+  var gitBranch = appToTest.branch;
+  debug(util.format('App repository\'s branch is [%s]', gitBranch));
+
+  var appName = getAppName(appToTest);
   debug('Adding test for app [%s]', appName);
   assert(appName);
 
-  var gitClonePath = path.join(TESTS_DIR, appName);
+  var gitClonePath = getGitClonePathForApp(appToTest);
   debug('Git clone path: ' + gitClonePath);
   assert(gitClonePath);
+
+  var npmTestScript = appToTest["npm-test-script"] || 'test';
+  debug('npm test script to run: [%s]', npmTestScript);
+  assert(npmTestScript);
 
   var additionalNpmDeps = appToTest["additional-npm-deps"];
   if (additionalNpmDeps) {
@@ -237,36 +290,79 @@ function runTestForApp(npmBinPath, appToTest, cb) {
           additionalNpmDeps.join(", "));
   }
 
-  var testTitle = "git clone && npm install && npm test for " + appName;
+  debug('Starting test...');
 
-  test(testTitle, { timeout: 1000000 }, function appTest(t) {
-    var testTasks = [ gitClone.bind(global, appRepo, gitClonePath) ];
+  var testTasks = [
+    gitClone.bind(global,
+                  appRepo,
+                  gitClonePath)
+  ];
 
-    if (appToTest["package-json-change"]) {
-      testTasks.push(updatePackageJson.bind(global,
-                                            gitClonePath,
-                                            appToTest["package-json-change"]));
+  if (gitBranch) {
+    testTasks.push(gitCheckout.bind(global, gitClonePath, gitBranch));
+  }
+
+  if (appToTest["package-json-change"]) {
+    testTasks.push(updatePackageJson.bind(global,
+                                          gitClonePath,
+                                          appToTest["package-json-change"]));
+  }
+
+  testTasks = testTasks.concat([
+      npmInstall.bind(global, npmBinPath, gitClonePath),
+      npmInstall.bind(global, npmBinPath, gitClonePath, additionalNpmDeps),
+      npmTest.bind(global,    npmBinPath, npmTestScript, gitClonePath),
+    ]);
+
+  async.series(testTasks, function (err, results) {
+    if (err) {
+      debug('Error:');
+      debug(err);
     }
 
-    testTasks = testTasks.concat([
-        npmInstall.bind(global, npmBinPath, gitClonePath),
-        npmInstall.bind(global, npmBinPath, gitClonePath, additionalNpmDeps),
-        npmTest.bind(global,    npmBinPath, gitClonePath),
-      ]);
+    return cb();
+  });
+}
 
-    async.series(testTasks, function (err, results) {
-      if (err) {
-        debug('Error:');
-        debug(err);
-      }
+function makeTapLineCompatibleWithJenkins(tapLine) {
+  tapLine = tapLine.replace(/^\s/, '# ');
+  return tapLine;
+}
 
-      var testMessage = util.format("%s with Node %s", appName,
-                                    process.version);
-      t.equal(err, undefined, testMessage);
+function addAppNameToTestDescription(tapLine, appName) {
+  return tapLine.replace(/^(.*ok\s\d+\s)(.*)/, function(match, result, testDesc) {
+    return result + ' ' + appName + ' ' + testDesc;
+  });
+}
 
-      t.end();
-      return cb();
-    });
+function retrieveTapFiles(appToTest, cb) {
+  var gitClonePath = getGitClonePathForApp(appToTest);
+  debug(util.format('Retrieving tap files from directory [%s]...',
+                    gitClonePath));
+
+  glob(path.join(gitClonePath, '*.tap'), function(err, files) {
+    if (!err) {
+      async.eachSeries(files, function(srcFilepath, done) {
+        var dstFilename = getAppName(appToTest) + '-'  + path.basename(srcFilepath);
+        var dstFilepath = path.join(TESTS_RESULTS_DIR, dstFilename);
+        debug(util.format('Copying file [%s] to [%s]', srcFilepath, dstFilepath));
+
+        var adjustedTapStream = fs.createWriteStream(dstFilepath);
+        fs.createReadStream(srcFilepath)
+        .pipe(split())
+        .on('data', function(line) {
+          var adjustedLine = makeTapLineCompatibleWithJenkins(line.toString());
+          adjustedLine = addAppNameToTestDescription(adjustedLine, getAppName(appToTest));
+          adjustedTapStream.write(adjustedLine + '\n');
+        })
+        .on('end', function() {
+          adjustedTapStream.end();
+          done();
+        });
+      });
+    }
+
+    return cb(err);
   });
 }
 
@@ -274,6 +370,8 @@ function setupTestsWorkspace(cb) {
   async.series([
     rimraf.bind(this, TESTS_DIR),
     fs.mkdir.bind(this, TESTS_DIR),
+    rimraf.bind(this, TESTS_RESULTS_DIR),
+    fs.mkdir.bind(this, TESTS_RESULTS_DIR),
   ], cb);
 }
 
@@ -305,7 +403,12 @@ function runTestForApps(npmBinPath, apps, cb) {
   }
 
   async.eachSeries(apps, function(app, done) {
-    runTestForApp(npmBinPath, app, done);
+    runTestForApp(npmBinPath, app, function(err) {
+      retrieveTapFiles(app, function(err) {
+        debug(util.format('App [%s] tested!', getAppName(app)));
+        done(err);
+      });
+    });
   }, function allAppsTested(err, results) {
     return cb(err);
   });
