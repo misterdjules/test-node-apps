@@ -366,6 +366,41 @@ function retrieveTapFiles(appToTest, cb) {
   });
 }
 
+function retrieveAdditionalResultsFiles(app, cb) {
+  var gitClonePath = getGitClonePathForApp(app);
+
+  var patterns = app['tests-results-files'];
+  if (patterns) {
+    return async.eachSeries(patterns, function(pattern, patternDone) {
+
+      debug(util.format('Retrieving additional files with pattern: [%s]',
+                        pattern));
+
+      glob(path.join(gitClonePath, pattern), function(err, files) {
+        if (!err) {
+          async.each(files, function(srcFilepath, fileDone) {
+            var srcFilename = path.basename(srcFilepath);
+            var dstFilename = getAppName(app) + '-' + srcFilename;
+            var dstFilepath = path.join(TESTS_RESULTS_DIR, dstFilename);
+
+            debug(util.format('Copying file [%s] to [%s]',
+                              srcFilepath,
+                              dstFilepath));
+
+            fs.createReadStream(srcFilepath)
+            .pipe(fs.createWriteStream(dstFilepath))
+            .on('end', fileDone);
+          }, patternDone);
+        } else {
+          return patternDone(err);
+        }
+      });
+    }, cb);
+  } else {
+    return cb();
+  }
+}
+
 function setupTestsWorkspace(cb) {
   async.series([
     rimraf.bind(this, TESTS_DIR),
@@ -403,11 +438,13 @@ function runTestForApps(npmBinPath, apps, cb) {
   }
 
   async.eachSeries(apps, function(app, done) {
-    runTestForApp(npmBinPath, app, function(err) {
-      retrieveTapFiles(app, function(err) {
-        debug(util.format('App [%s] tested!', getAppName(app)));
-        done(err);
-      });
+    async.series([
+      runTestForApp.bind(global, npmBinPath, app),
+      retrieveTapFiles.bind(global, app),
+      retrieveAdditionalResultsFiles.bind(global, app)
+    ], function(err, results) {
+      debug(util.format('App [%s] tested!', getAppName(app)));
+      done(err);
     });
   }, function allAppsTested(err, results) {
     return cb(err);
