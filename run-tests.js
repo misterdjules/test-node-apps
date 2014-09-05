@@ -151,14 +151,38 @@ function npmInstall(npmBinPath, workingDir, packages, cb) {
   });
 }
 
-function npmTest(npmBinPath, npmTestScript, workingDir, cb) {
-  assert(npmBinPath);
-  assert(npmTestScript);
+function npmTest(npmBinPath, npmTestScript, workingDir, additionalEnvVars, cb) {
+  assert(typeof npmBinPath === 'string', "npmBinPath must be a string");
+  assert(typeof npmTestScript === 'string', "npmTestScript must be a string");
+  assert(Array.isArray(additionalEnvVars),
+         "additionalEnvVars must be an array object");
 
   var npmTestArgs = [npmBinPath, 'run', npmTestScript];
+
+  var augmentedEnv;
+  if (additionalEnvVars) {
+    debug('Augmenting npm test process environment...');
+
+    Object.keys(process.env).forEach(function(envVar) {
+      if (!augmentedEnv) augmentedEnv = {};
+      augmentedEnv[envVar] = process.env[envVar];
+    });
+
+    debug('additionalEnvVars: ' + additionalEnvVars);
+    additionalEnvVars.forEach(function(envVarString) {
+      var envVar = envVarString.split('=');
+      if (envVar.length === 2) {
+        if (!augmentedEnv) augmentedEnv = {};
+
+        debug(util.format('Adding env var [%s]=[%s]', envVar[0], envVar[1]));
+        augmentedEnv[envVar[0]] = envVar[2];
+      }
+    })
+  }
+
   var spawnedNpmTest = spawn(process.execPath,
                              npmTestArgs,
-                             { cwd: workingDir });
+                             { cwd: workingDir, env: (augmentedEnv ? augmentedEnv : process.env) });
   var stderr;
 
   spawnedNpmTest.on('exit', function onNpmTestClosed(code) {
@@ -307,10 +331,16 @@ function runTestForApp(npmBinPath, appToTest, cb) {
                                           appToTest["package-json-change"]));
   }
 
+  var additionalEnvVars = [];
+  if (appToTest["additional-env-vars"]) {
+    additionalEnvVars = appToTest["additional-env-vars"];
+  }
+
   testTasks = testTasks.concat([
       npmInstall.bind(global, npmBinPath, gitClonePath),
       npmInstall.bind(global, npmBinPath, gitClonePath, additionalNpmDeps),
-      npmTest.bind(global,    npmBinPath, npmTestScript, gitClonePath),
+      npmTest.bind(global, npmBinPath, npmTestScript, gitClonePath,
+                   additionalEnvVars),
     ]);
 
   async.series(testTasks, function (err, results) {
@@ -329,9 +359,10 @@ function makeTapLineCompatibleWithJenkins(tapLine) {
 }
 
 function addAppNameToTestDescription(tapLine, appName) {
-  return tapLine.replace(/^(.*ok\s\d+\s)(.*)/, function(match, result, testDesc) {
-    return result + ' ' + appName + ' ' + testDesc;
-  });
+  return tapLine.replace(/^(.*ok\s\d+\s)(.*)/,
+                        function(match, result, testDesc) {
+                          return result + ' ' + appName + ' ' + testDesc;
+                        });
 }
 
 function retrieveTapFiles(appToTest, cb) {
@@ -342,16 +373,21 @@ function retrieveTapFiles(appToTest, cb) {
   glob(path.join(gitClonePath, '*.tap'), function(err, files) {
     if (!err) {
       async.eachSeries(files, function(srcFilepath, done) {
-        var dstFilename = getAppName(appToTest) + '-'  + path.basename(srcFilepath);
+        var dstFilename = getAppName(appToTest) +
+                          '-'  + path.basename(srcFilepath);
         var dstFilepath = path.join(TESTS_RESULTS_DIR, dstFilename);
-        debug(util.format('Copying file [%s] to [%s]', srcFilepath, dstFilepath));
+
+        debug(util.format('Copying file [%s] to [%s]',
+                          srcFilepath,
+                          dstFilepath));
 
         var adjustedTapStream = fs.createWriteStream(dstFilepath);
         fs.createReadStream(srcFilepath)
         .pipe(split())
         .on('data', function(line) {
           var adjustedLine = makeTapLineCompatibleWithJenkins(line.toString());
-          adjustedLine = addAppNameToTestDescription(adjustedLine, getAppName(appToTest));
+          adjustedLine = addAppNameToTestDescription(adjustedLine,
+                                                     getAppName(appToTest));
           adjustedTapStream.write(adjustedLine + '\n');
         })
         .on('end', function() {
