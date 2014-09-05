@@ -358,10 +358,10 @@ function retrieveTapFiles(appToTest, cb) {
           adjustedTapStream.end();
           done();
         });
-      });
+      }, cb);
+    } else {
+      return cb(err);
     }
-
-    return cb(err);
   });
 }
 
@@ -377,7 +377,7 @@ function retrieveAdditionalResultsFiles(app, cb) {
 
       glob(path.join(gitClonePath, pattern), function(err, files) {
         if (!err) {
-          async.each(files, function(srcFilepath, fileDone) {
+          return async.each(files, function(srcFilepath, fileDone) {
             var srcFilename = path.basename(srcFilepath);
             var dstFilename = getAppName(app) + '-' + srcFilename;
             var dstFilepath = path.join(TESTS_RESULTS_DIR, dstFilename);
@@ -388,7 +388,7 @@ function retrieveAdditionalResultsFiles(app, cb) {
 
             fs.createReadStream(srcFilepath)
             .pipe(fs.createWriteStream(dstFilepath))
-            .on('end', fileDone);
+            .on('finish', fileDone);
           }, patternDone);
         } else {
           return patternDone(err);
