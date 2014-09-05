@@ -429,9 +429,9 @@ function listApps(cb) {
 }
 
 function runTestForApps(npmBinPath, apps, cb) {
-  assert(npmBinPath);
-  assert(apps);
-  assert(cb);
+  assert(npmBinPath, "A path to npm's module must be provided");
+  assert(apps, "A list of applications to test must be provided");
+  assert(cb, "A callback must be provided");
 
   if (!apps) {
     return cb();
