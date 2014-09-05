@@ -243,12 +243,27 @@ function findNpmBinPath(cb) {
   debug('Looking for npm binary...');
 
   if (process.platform === 'win32') {
-    npmBinPath = path.join("/", "Program Files (x86)",
-                           "nodejs",
-                           "node_modules",
-                           "npm",
-                           "bin", "npm-cli.js");
-    return cb(null, npmBinPath);
+    var npmBinCandidates = [  path.join("/", "Program Files (x86)",
+                                        "nodejs",
+                                        "node_modules",
+                                        "npm",
+                                        "bin", "npm-cli.js"),
+                              path.join("/", "Program Files",
+                                       "nodejs",
+                                       "node_modules",
+                                       "npm",
+                                       "bin", "npm-cli.js")
+                            ];
+    npmBinCandidates.some(function(npmBinCandidate) {
+      var npmBinFound = false;
+      fs.stat(npmBinCandidate, function(err) {
+        if (!err) {
+          npmBinFound = true;
+          return cb(null, npmBinCandidate);
+        }
+      });
+      return npmBinFound;
+    });
   } else {
     which('npm', function (err, path) {
       if (!err && path) {
@@ -516,6 +531,7 @@ listApps(function(err, apps) {
       }
 
       findNpmBinPath(function(err, npmBinPath) {
+        debug(util.format('Found npm bin at [%s]', npmBinPath));
         runTestForApps(npmBinPath, appsToTest, function(err) {
           debug('All apps tested!');
         });
