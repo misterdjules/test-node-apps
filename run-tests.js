@@ -4,7 +4,6 @@ var path = require('path');
 var assert = require('assert');
 var util   = require('util');
 
-var test = require('tap').test
 var async  = require('async');
 var debug  = require('debug')('test-node-apps');
 var rimraf = require('rimraf');
