@@ -254,15 +254,25 @@ function findNpmBinPath(cb) {
                                        "npm",
                                        "bin", "npm-cli.js")
                             ];
-    npmBinCandidates.some(function(npmBinCandidate) {
-      var npmBinFound = false;
+    var npmBinPath;
+    async.some(npmCandidates, function(npmBinCandidate, found) {
+      debug(util.format('Trying with [%s]', npmBinCandidate));
+
       fs.stat(npmBinCandidate, function(err) {
         if (!err) {
-          npmBinFound = true;
-          return cb(null, npmBinCandidate);
+          npmBinPath = npmBinCandidate;
+          return found(true);
         }
+
+        return found(false);
       });
-      return npmBinFound;
+    }, function(npmBinFound) {
+      var err;
+      if (!npmBinFound) {
+        err = new Error("Could not find npm bin path");
+      }
+
+      return cb(err, npmBinPath);
     });
   } else {
     which('npm', function (err, path) {
