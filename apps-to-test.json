@@ -4,7 +4,6 @@
     "branch": "ci-tests-results",
     "additional-npm-deps": ["casperjs", "phantomjs@1.9.1-7", "tap-file"],
     "npm-test-script": "test-ci",
-    "additional-env-vars": ["FILE_TAP=results.tap"],
     "tests-results-files": ["core/test/functional/*.xml"]
   },
   {
