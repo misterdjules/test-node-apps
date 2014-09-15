@@ -18,8 +18,8 @@
     "npm-test-script": "test-tap-file"
   },
   {
-    "repo": "git://github.com/misterdjules/hapi.git",
-    "branch": "test-tap",
+    "repo": "git://github.com/hapijs/hapi.git",
+    "branch": "master",
     "npm-test-script": "test-tap"
   },
   {
