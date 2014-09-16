@@ -156,8 +156,9 @@ function npmTest(npmBinPath, appToTest, cb) {
   assert(typeof appToTest === 'object' && appToTest != null,
          'appToTest must be a non-null object');
 
-  var npmTestScript = appToTest['npm-test-script'];
+  var npmTestScript = appToTest['npm-test-script'] || 'test';
   assert(typeof npmTestScript === 'string', "npmTestScript must be a string");
+  debug('npm test script to run: [%s]', npmTestScript);
 
   var workingDir = getGitClonePathForApp(appToTest);
   assert(typeof workingDir === 'string', 'workingDir must be a valid string');
@@ -188,7 +189,10 @@ function npmTest(npmBinPath, appToTest, cb) {
 
   var testOutputStream;
   if (appToTest['test-output-from-stdout']) {
-    var testOutputFilename = getAppName(appToTest) + '-results.tap';
+    var testOutputFilename = util.format('%s-%s-%s',
+                                         getAppName(appToTest),
+                                         appToTest.branch,
+                                         'results.tap');
     testOutputStream = fs.createWriteStream(path.join(TESTS_RESULTS_DIR,
                                                       testOutputFilename));
   }
@@ -220,11 +224,12 @@ function npmTest(npmBinPath, appToTest, cb) {
     stderr += data;
   });
 
+  if (testOutputStream) {
+    fixTapOutput(appToTest, spawnedNpmTest.stdout, testOutputStream);
+  }
+
   spawnedNpmTest.stdout.on('data', function(data) {
     debug('npm test stdout: ', data.toString());
-    if (testOutputStream) {
-      testOutputStream.write(data);
-    }
   });
 }
 
@@ -331,7 +336,7 @@ function getGitClonePathForApp(appToTest) {
   var appName = getAppName(appToTest);
   assert(appName);
 
-  return path.join(TESTS_DIR, appName);
+  return path.join(TESTS_DIR, appName + '-' + appToTest['branch']);
 }
 
 function runTestForApp(npmBinPath, appToTest, cb) {
@@ -352,10 +357,6 @@ function runTestForApp(npmBinPath, appToTest, cb) {
   var gitClonePath = getGitClonePathForApp(appToTest);
   debug('Git clone path: ' + gitClonePath);
   assert(gitClonePath);
-
-  var npmTestScript = appToTest["npm-test-script"] || 'test';
-  debug('npm test script to run: [%s]', npmTestScript);
-  assert(npmTestScript);
 
   var additionalNpmDeps = appToTest["additional-npm-deps"];
   if (additionalNpmDeps) {
@@ -409,6 +410,27 @@ function addAppNameToTestDescription(tapLine, appName) {
                         });
 }
 
+function fixTapOutput(appToTest, tapInputStream, fixedTapOutputStream, cb) {
+  assert(typeof tapInputStream === 'object',
+         'tapInputStream must be a non-null object');
+  assert(typeof fixedTapOutputStream === 'object',
+         'fixedTapOutputStream must be a non-null object');
+
+  tapInputStream.pipe(split())
+  .on('data', function(line) {
+    var adjustedLine = makeTapLineCompatibleWithJenkins(line.toString());
+    var appTitle = util.format('%s-%s',
+                               getAppName(appToTest),
+                               appToTest.branch);
+    adjustedLine = addAppNameToTestDescription(adjustedLine, appTitle);
+    fixedTapOutputStream.write(adjustedLine + '\n');
+  })
+  .on('end', function() {
+    fixedTapOutputStream.end();
+    if (cb) cb();
+  });
+}
+
 function retrieveTapFiles(appToTest, cb) {
   var gitClonePath = getGitClonePathForApp(appToTest);
   debug(util.format('Retrieving tap files from directory [%s]...',
@@ -417,27 +439,20 @@ function retrieveTapFiles(appToTest, cb) {
   glob(path.join(gitClonePath, '*.tap'), function(err, files) {
     if (!err) {
       async.eachSeries(files, function(srcFilepath, done) {
-        var dstFilename = getAppName(appToTest) +
-                          '-'  + path.basename(srcFilepath);
+        var dstFilename = util.format('%s-%s-%s',
+                                      getAppName(appToTest),
+                                      appToTest.branch,
+                                      path.basename(srcFilepath));
         var dstFilepath = path.join(TESTS_RESULTS_DIR, dstFilename);
 
         debug(util.format('Copying file [%s] to [%s]',
                           srcFilepath,
                           dstFilepath));
 
+
         var adjustedTapStream = fs.createWriteStream(dstFilepath);
-        fs.createReadStream(srcFilepath)
-        .pipe(split())
-        .on('data', function(line) {
-          var adjustedLine = makeTapLineCompatibleWithJenkins(line.toString());
-          adjustedLine = addAppNameToTestDescription(adjustedLine,
-                                                     getAppName(appToTest));
-          adjustedTapStream.write(adjustedLine + '\n');
-        })
-        .on('end', function() {
-          adjustedTapStream.end();
-          done();
-        });
+        var tapInputStream = fs.createReadStream(srcFilepath);
+        fixTapOutput(appToTest, tapInputStream, adjustedTapStream, done)
       }, cb);
     } else {
       return cb(err);
@@ -496,7 +511,7 @@ function listApps(cb) {
       apps.list = [];
 
       appsToTest.forEach(function(appToTest) {
-        var appName = getAppNameFromGitUrl(appToTest.repo);
+        var appName = util.format('%s-%s', getAppNameFromGitUrl(appToTest.repo), appToTest.branch);
         appToTest.name = appName;
         apps.list.push(appToTest);
         apps[appName] = appToTest;
