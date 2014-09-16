@@ -13,9 +13,10 @@
     "npm-test-script": "test-ci"
   },
   {
-    "repo": "git://github.com/misterdjules/express.git",
-    "branch": "ci-test-results",
-    "npm-test-script": "test-tap-file"
+    "repo": "git://github.com/strongloop/express.git",
+    "branch": "3.x",
+    "test-output-from-stdout": true,
+    "npm-test-script": "test-tap"
   },
   {
     "repo": "git://github.com/hapijs/hapi.git",

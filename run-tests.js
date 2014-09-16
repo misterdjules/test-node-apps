@@ -151,15 +151,21 @@ function npmInstall(npmBinPath, workingDir, packages, cb) {
   });
 }
 
-function npmTest(npmBinPath, npmTestScript, workingDir, additionalEnvVars, cb) {
+function npmTest(npmBinPath, appToTest, cb) {
   assert(typeof npmBinPath === 'string', "npmBinPath must be a string");
-  assert(typeof npmTestScript === 'string', "npmTestScript must be a string");
-  assert(Array.isArray(additionalEnvVars),
-         "additionalEnvVars must be an array object");
+  assert(typeof appToTest === 'object' && appToTest != null,
+         'appToTest must be a non-null object');
 
-  var npmTestArgs = [npmBinPath, 'run', npmTestScript];
+  var npmTestScript = appToTest['npm-test-script'];
+  assert(typeof npmTestScript === 'string', "npmTestScript must be a string");
+
+  var workingDir = getGitClonePathForApp(appToTest);
+  assert(typeof workingDir === 'string', 'workingDir must be a valid string');
+
+  var npmTestArgs = [npmBinPath, '--silent', 'run', npmTestScript];
 
   var augmentedEnv;
+  var additionalEnvVars = appToTest['additional-env-vars'];
   if (additionalEnvVars) {
     debug('Augmenting npm test process environment...');
 
@@ -180,16 +186,32 @@ function npmTest(npmBinPath, npmTestScript, workingDir, additionalEnvVars, cb) {
     })
   }
 
+  var testOutputStream;
+  if (appToTest['test-output-from-stdout']) {
+    var testOutputFilename = getAppName(appToTest) + '-results.tap';
+    testOutputStream = fs.createWriteStream(path.join(TESTS_RESULTS_DIR,
+                                                      testOutputFilename));
+  }
+
   var spawnedNpmTest = spawn(process.execPath,
                              npmTestArgs,
-                             { cwd: workingDir, env: (augmentedEnv ? augmentedEnv : process.env) });
+                             { cwd: workingDir,
+                               env: (augmentedEnv ? augmentedEnv : process.env) });
   var stderr;
 
   spawnedNpmTest.on('exit', function onNpmTestClosed(code) {
+    if (testOutputStream) {
+      testOutputStream.end();
+    }
+
     return handleExitCode(code, stderr, cb);
   });
 
   spawnedNpmTest.on('error', function onNpmInstallClosed(err) {
+    if (testOutputStream) {
+      testOutputStream.end();
+    }
+
     return cb(err);
   });
 
@@ -200,6 +222,9 @@ function npmTest(npmBinPath, npmTestScript, workingDir, additionalEnvVars, cb) {
 
   spawnedNpmTest.stdout.on('data', function(data) {
     debug('npm test stdout: ', data.toString());
+    if (testOutputStream) {
+      testOutputStream.write(data);
+    }
   });
 }
 
@@ -356,16 +381,10 @@ function runTestForApp(npmBinPath, appToTest, cb) {
                                           appToTest["package-json-change"]));
   }
 
-  var additionalEnvVars = [];
-  if (appToTest["additional-env-vars"]) {
-    additionalEnvVars = appToTest["additional-env-vars"];
-  }
-
   testTasks = testTasks.concat([
       npmInstall.bind(global, npmBinPath, gitClonePath),
       npmInstall.bind(global, npmBinPath, gitClonePath, additionalNpmDeps),
-      npmTest.bind(global, npmBinPath, npmTestScript, gitClonePath,
-                   additionalEnvVars),
+      npmTest.bind(global, npmBinPath, appToTest),
     ]);
 
   async.series(testTasks, function (err, results) {
