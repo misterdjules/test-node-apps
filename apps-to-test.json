@@ -1,16 +1,16 @@
 [
   {
     "repo": "git://github.com/misterdjules/Ghost.git",
-    "branch": "ci-tests-results",
+    "branch": "output-tests-results-to-files",
     "additional-npm-deps": ["casperjs", "phantomjs@1.9.1-7", "tap-file"],
     "npm-test-script": "test-ci",
     "tests-results-files": ["core/test/functional/*.xml"]
   },
   {
-    "repo": "git://github.com/misterdjules/grunt.git",
-    "branch": "ci-tests-output",
+    "repo": "git://github.com/gruntjs/grunt.git",
+    "branch": "master",
     "additional-npm-deps": ["grunt-cli"],
-    "npm-test-script": "test-ci"
+    "npm-test-script": "test-tap"
   },
   {
     "repo": "git://github.com/strongloop/express.git",
