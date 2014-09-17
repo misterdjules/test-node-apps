@@ -276,17 +276,25 @@ function findNpmBinPath(cb) {
   debug('Looking for npm binary...');
 
   if (process.platform === 'win32') {
-    var npmBinCandidates = [  path.join("/", "Program Files (x86)",
-                                        "nodejs",
-                                        "node_modules",
-                                        "npm",
-                                        "bin", "npm-cli.js"),
-                              path.join("/", "Program Files",
-                                       "nodejs",
-                                       "node_modules",
-                                       "npm",
-                                       "bin", "npm-cli.js")
-                            ];
+    var driveLetters = ['C', 'D'];
+    var npmPaths = [  path.join("/", "Program Files (x86)",
+                                "nodejs",
+                                "node_modules",
+                                "npm",
+                                "bin", "npm-cli.js"),
+                      path.join("/", "Program Files",
+                                "nodejs",
+                                "node_modules",
+                                "npm",
+                                "bin", "npm-cli.js")
+                    ];
+    var npmBinCandidates = [];
+    driveLetters.forEach(function(driveLetter) {
+      npmPaths.forEach(function(npmPath) {
+        npmBinCandidates.push(path.join(driveLetter + ':', npmPath));
+      })
+    });
+
     var npmBinPath;
     async.some(npmBinCandidates, function(npmBinCandidate, found) {
       debug(util.format('Trying with [%s]', npmBinCandidate));
