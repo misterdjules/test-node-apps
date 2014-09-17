@@ -288,7 +288,7 @@ function findNpmBinPath(cb) {
                                        "bin", "npm-cli.js")
                             ];
     var npmBinPath;
-    async.some(npmCandidates, function(npmBinCandidate, found) {
+    async.some(npmBinCandidates, function(npmBinCandidate, found) {
       debug(util.format('Trying with [%s]', npmBinCandidate));
 
       fs.stat(npmBinCandidate, function(err) {
