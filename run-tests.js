@@ -30,7 +30,10 @@ function getAppName(appToTest) {
 function handleExitCode(code, stderr, cb) {
   var error;
   if (code !== 0) {
-    var errMsg = "command failed:\n" + stderr.toString();
+    var errMsg = "Command failed!";
+    if (stderr) {
+      errMsg += "\nreason: " + stderr.toString();
+    }
     error = new Error(errMsg);
   }
 
