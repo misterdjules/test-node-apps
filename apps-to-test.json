@@ -7,8 +7,8 @@
     "tests-results-files": ["core/test/functional/*.xml"]
   },
   {
-    "repo": "git://github.com/gruntjs/grunt.git",
-    "branch": "master",
+    "repo": "git://github.com/misterdjules/grunt.git",
+    "branch": "ci-tests-output",
     "additional-npm-deps": ["grunt-cli"],
     "npm-test-script": "test-tap"
   },
