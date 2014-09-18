@@ -113,3 +113,19 @@ continuous integration platform:
   }
 }
 ```
+
+## Debug information
+
+If you'd like to investigate what the program is actually doing, you should
+set the `DEBUG` environment variable to `test-node-apps` like so:
+
+```
+$ DEBUG=`test-node-apps` node run-tests.js
+```
+You should then see a lot of debug output like following:
+```
+test-node-apps Loading apps to test... +0ms
+test-node-apps Setup of tests workspace done successfully! +112ms
+test-node-apps Looking for npm binary... +0ms
+test-node-apps Found npm bin at [/usr/local/bin/npm] +1ms
+```
