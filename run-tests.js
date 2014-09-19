@@ -556,6 +556,13 @@ function runTestForApps(npmBinPath, apps, cb) {
   });
 }
 
+function displayAppsList(appsList) {
+  appsList.forEach(function(appToTest) {
+    console.log('  * ' + appToTest.name);
+    console.log('    - ' + 'Git URL: ', appToTest.repo);
+  });
+}
+
 listApps(function(err, apps) {
   if (err) {
     console.error('Could not list applications to test: ', err);
@@ -564,10 +571,7 @@ listApps(function(err, apps) {
 
   if (argv["list-apps"]) {
     console.log('Applications to test:')
-    apps.list.forEach(function(appToTest) {
-      console.log('  * ' + appToTest.name);
-      console.log('    - ' + 'Git URL: ', appToTest.repo);
-    });
+    displayAppsList(apps.list);
   } else {
     setupTestsWorkspace(function(err) {
       if (err) {
@@ -581,6 +585,13 @@ listApps(function(err, apps) {
       if (argv["apps"]) {
         appsToTest = [];
         argv["apps"].split(',').forEach(function(appName) {
+          if (!apps[appName]) {
+            console.error('Could not find app with name [%s]', appName);
+            console.error('Available apps are:');
+            displayAppsList(apps.list);
+            process.exit(1);
+          }
+
           appsToTest.push(apps[appName]);
         });
       }
