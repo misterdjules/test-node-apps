@@ -21,12 +21,8 @@
   {
     "repo": "git://github.com/strongloop/express.git",
     "branch": "master",
-    "package-json-change": {
-      "scripts": {
-        "test": "mocha --require test/support/env --reporter tap --bail --check-leaks test/ test/acceptance/"
-      }
-    },
-    "test-output-from-stdout": true
+    "test-output-from-stdout": true,
+    "npm-test-script": "test-tap"
   },
   {
     "repo": "git://github.com/hapijs/hapi.git",
