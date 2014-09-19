@@ -1,10 +1,13 @@
 [
   {
-    "repo": "git://github.com/misterdjules/Ghost.git",
-    "branch": "output-tests-results-to-files",
-    "additional-npm-deps": ["casperjs", "phantomjs@1.9.1-7", "tap-file"],
-    "npm-test-script": "test-ci",
-    "tests-results-files": ["core/test/functional/*.xml"]
+    "repo": "git://github.com/TryGhost/Ghost.git",
+    "branch": "master",
+    "additional-npm-deps": ["grunt-cli"],
+    "package-json-change": {
+      "scripts": {
+        "test": "grunt test-unit --reporter tap --reporter-output unit.tap; grunt test-integration --reporter tap --reporter-output integration.tap"
+      }
+    }
   },
   {
     "repo": "git://github.com/misterdjules/grunt.git",
