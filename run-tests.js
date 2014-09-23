@@ -522,7 +522,9 @@ function listApps(cb) {
       apps.list = [];
 
       appsToTest.forEach(function(appToTest) {
-        var appName = util.format('%s-%s', getAppNameFromGitUrl(appToTest.repo), appToTest.branch);
+        appToTest.branch = appToTest.branch || 'master';
+        var appName = getAppNameFromGitUrl(appToTest.repo);
+        appName = util.format('%s-%s', appName, appToTest.branch);
         appToTest.name = appName;
         apps.list.push(appToTest);
         apps[appName] = appToTest;
