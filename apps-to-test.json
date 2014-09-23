@@ -1,7 +1,6 @@
 [
   {
     "repo": "git://github.com/TryGhost/Ghost.git",
-    "branch": "master",
     "additional-npm-deps": ["grunt-cli"],
     "package-json-change": {
       "scripts": {
@@ -23,18 +22,21 @@
   },
   {
     "repo": "git://github.com/strongloop/express.git",
-    "branch": "master",
     "test-output-from-stdout": true,
     "npm-test-script": "test-tap"
   },
   {
     "repo": "git://github.com/hapijs/hapi.git",
-    "branch": "master",
     "npm-test-script": "test-tap"
   },
   {
     "repo": "git://github.com/misterdjules/node-restify.git",
     "branch": "test-tap-file",
     "npm-test-script": "test-tap-file"
+  },
+  {
+    "repo": "git://github.com/npm/npm.git",
+    "test-output-from-stdout": true,
+    "npm-test-script": "test-all"
   }
 ]

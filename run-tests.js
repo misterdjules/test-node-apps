@@ -415,8 +415,8 @@ function makeTapLineCompatibleWithJenkins(tapLine) {
 }
 
 function addAppNameToTestDescription(tapLine, appName) {
-  return tapLine.replace(/^(.*ok\s\d+\s)(.*)/,
-                        function(match, result, testDesc) {
+  return tapLine.replace(/^(.*ok\s(\d+)?\s?)(.*)/,
+                        function(match, result, testNumber, testDesc) {
                           return result + ' ' + appName + ' ' + testDesc;
                         });
 }
